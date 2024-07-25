@@ -1,0 +1,5 @@
+tensorflow
+pillow
+pyheif
+numpy
+Flask
