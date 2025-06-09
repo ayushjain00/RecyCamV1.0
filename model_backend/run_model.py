@@ -22,7 +22,7 @@ def convert_to_png(img_path):
 
     if not img_path.lower().endswith('.png'):
         png_path = img_path.rsplit('.', 1)[0] + '.png'
-        # img.save(png_path, 'PNG')
+        img.save(png_path, 'PNG')
         return png_path
     return img_path
 
