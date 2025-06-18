@@ -7,7 +7,7 @@ extension UIColor: Convertible {
       if let namedColorComponents = namedColors[value] {
         return uiColorWithComponents(namedColorComponents.map { $0 / 255 }) as! Self
       }
-      return try Conversions.toColor(hexString: value) as! Self
+      return try Conversions.toColor(colorString: value) as! Self
     }
     if let components = value as? [Double] {
       return uiColorWithComponents(components) as! Self
@@ -35,6 +35,7 @@ extension UIColor: Convertible {
         let highContrastLightColor = try appearances["highContrastLight"].map({ try UIColor.convert(from: $0, appContext: appContext) })
         let highContrastDarkColor = try appearances["highContrastDark"].map({ try UIColor.convert(from: $0, appContext: appContext) })
 
+        #if os(iOS) || os(tvOS)
         let color = UIColor { (traitCollection: UITraitCollection) -> UIColor in
           if traitCollection.userInterfaceStyle == .dark {
             if traitCollection.accessibilityContrast == .high, let highContrastDarkColor {
@@ -48,8 +49,29 @@ extension UIColor: Convertible {
           }
           return lightColor
         }
+        #elseif os(macOS)
+        let color = NSColor(name: nil) { (appearance: NSAppearance) -> NSColor in
+          let isDarkMode = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+          let isHighContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+
+          if isDarkMode {
+            if isHighContrast, let highContrastDarkColor = highContrastDarkColor {
+              return highContrastDarkColor
+            }
+            return darkColor
+          }
+
+          if isHighContrast, let highContrastLightColor = highContrastLightColor {
+            return highContrastLightColor
+          }
+          return lightColor
+        }
+        #endif
         return color as! Self
       }
+    }
+    if let color = value as? Self {
+      return color
     }
     throw Conversions.ConvertingException<UIColor>(value)
     // swiftlint:enable force_cast

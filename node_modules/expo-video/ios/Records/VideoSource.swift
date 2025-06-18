@@ -12,5 +12,14 @@ internal struct VideoSource: Record {
 
   @Field
   var metadata: VideoMetadata? = nil
+
+  @Field
+  var headers: [String: String]? = nil
+
+  @Field
+  var useCaching: Bool = false
+
+  @Field
+  var contentType: ContentType = .auto
 }
 // swiftlint:enable redundant_optional_initialization

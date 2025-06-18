@@ -38,7 +38,7 @@ class SymbolView: ExpoView {
     }
 
     // Effects need to be added last
-    if #available(iOS 17.0, *) {
+    if #available(iOS 17.0, tvOS 17.0, *) {
       imageView.removeAllSymbolEffects()
       if animated {
         addSymbolEffects()
@@ -46,7 +46,7 @@ class SymbolView: ExpoView {
     }
   }
 
-  @available(iOS 17.0, *)
+  @available(iOS 17.0, tvOS 17.0, *)
   private func addSymbolEffects() {
     if let animationSpec {
       let repeating = animationSpec.repeating ?? false
@@ -72,27 +72,25 @@ class SymbolView: ExpoView {
   }
 
   private func getSymbolConfig() -> UIImage.SymbolConfiguration {
+    #if os(tvOS)
+    var config = UIImage.SymbolConfiguration(pointSize: 18.0, weight: weight, scale: scale)
+    #else
     var config = UIImage.SymbolConfiguration(pointSize: UIFont.systemFontSize, weight: weight, scale: scale)
+    #endif
 
     switch symbolType {
     case .monochrome:
-      if #available(iOS 16.0, *) {
+      if #available(iOS 16.0, tvOS 16.0, *) {
         config = config.applying(UIImage.SymbolConfiguration.preferringMonochrome())
       }
     case .hierarchical:
-      if #available(iOS 15, *) {
-        config = config.applying(UIImage.SymbolConfiguration(hierarchicalColor: tint ?? .systemBlue))
-      }
+      config = config.applying(UIImage.SymbolConfiguration(hierarchicalColor: tint ?? .systemBlue))
     case .palette:
-      if #available(iOS 15, *) {
-        if palette.count > 1 {
-          config = config.applying(UIImage.SymbolConfiguration(paletteColors: palette))
-        }
+      if palette.count > 1 {
+        config = config.applying(UIImage.SymbolConfiguration(paletteColors: palette))
       }
     case .multicolor:
-      if #available(iOS 15.0, *) {
-        config = config.applying(UIImage.SymbolConfiguration.preferringMulticolor())
-      }
+      config = config.applying(UIImage.SymbolConfiguration.preferringMulticolor())
     }
 
     return config

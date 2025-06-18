@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parseParameter = exports.getServerManifest = void 0;
+exports.getServerManifest = getServerManifest;
+exports.parseParameter = parseParameter;
 const matchers_1 = require("./matchers");
 const sortRoutes_1 = require("./sortRoutes");
 function isNotFoundRoute(route) {
@@ -19,42 +20,68 @@ function uniqueBy(arr, key) {
 }
 // Given a nested route tree, return a flattened array of all routes that can be matched.
 function getServerManifest(route) {
-    function getFlatNodes(route) {
+    function getFlatNodes(route, parentRoute = '') {
+        // Use a recreated route instead of contextKey because we duplicate nodes to support array syntax.
+        const absoluteRoute = [parentRoute, route.route].filter(Boolean).join('/');
         if (route.children.length) {
-            return route.children.map((child) => getFlatNodes(child)).flat();
+            return route.children.map((child) => getFlatNodes(child, absoluteRoute)).flat();
         }
         // API Routes are handled differently to HTML routes because they have no nested behavior.
         // An HTML route can be different based on parent segments due to layout routes, therefore multiple
         // copies should be rendered. However, an API route is always the same regardless of parent segments.
         let key;
-        if (route.type === 'api') {
+        if (route.type.includes('api')) {
             key = (0, matchers_1.getContextKey)(route.contextKey).replace(/\/index$/, '') ?? '/';
         }
         else {
-            key = (0, matchers_1.getContextKey)(route.route).replace(/\/index$/, '') ?? '/';
+            key = (0, matchers_1.getContextKey)(absoluteRoute).replace(/\/index$/, '') ?? '/';
         }
-        return [[key, route]];
+        return [[key, '/' + absoluteRoute, route]];
     }
     // Remove duplicates from the runtime manifest which expands array syntax.
     const flat = getFlatNodes(route)
-        .sort(([, a], [, b]) => (0, sortRoutes_1.sortRoutes)(b, a))
+        .sort(([, , a], [, , b]) => (0, sortRoutes_1.sortRoutes)(b, a))
         .reverse();
-    const apiRoutes = uniqueBy(flat.filter(([, route]) => route.type === 'api'), ([path]) => path);
-    const otherRoutes = uniqueBy(flat.filter(([, route]) => route.type === 'route'), ([path]) => path);
-    const standardRoutes = otherRoutes.filter(([, route]) => !isNotFoundRoute(route));
-    const notFoundRoutes = otherRoutes.filter(([, route]) => isNotFoundRoute(route));
+    const apiRoutes = uniqueBy(flat.filter(([, , route]) => route.type === 'api'), ([path]) => path);
+    const otherRoutes = uniqueBy(flat.filter(([, , route]) => route.type === 'route' ||
+        (route.type === 'rewrite' && (route.methods === undefined || route.methods.includes('GET')))), ([path]) => path);
+    const redirects = uniqueBy(flat.filter(([, , route]) => route.type === 'redirect'), ([path]) => path)
+        .map((redirect) => {
+        redirect[1] =
+            flat.find(([, , route]) => route.contextKey === redirect[2].destinationContextKey)?.[0] ??
+                '/';
+        return redirect;
+    })
+        .reverse();
+    const rewrites = uniqueBy(flat.filter(([, , route]) => route.type === 'rewrite'), ([path]) => path)
+        .map((rewrite) => {
+        rewrite[1] =
+            flat.find(([, , route]) => route.contextKey === rewrite[2].destinationContextKey)?.[0] ??
+                '/';
+        return rewrite;
+    })
+        .reverse();
+    const standardRoutes = otherRoutes.filter(([, , route]) => !isNotFoundRoute(route));
+    const notFoundRoutes = otherRoutes.filter(([, , route]) => isNotFoundRoute(route));
     return {
-        apiRoutes: getMatchableManifestForPaths(apiRoutes.map(([normalizedRoutePath, node]) => [normalizedRoutePath, node])),
-        htmlRoutes: getMatchableManifestForPaths(standardRoutes.map(([normalizedRoutePath, node]) => [normalizedRoutePath, node])),
-        notFoundRoutes: getMatchableManifestForPaths(notFoundRoutes.map(([normalizedRoutePath, node]) => [normalizedRoutePath, node])),
+        apiRoutes: getMatchableManifestForPaths(apiRoutes),
+        htmlRoutes: getMatchableManifestForPaths(standardRoutes),
+        notFoundRoutes: getMatchableManifestForPaths(notFoundRoutes),
+        redirects: getMatchableManifestForPaths(redirects),
+        rewrites: getMatchableManifestForPaths(rewrites),
     };
 }
-exports.getServerManifest = getServerManifest;
 function getMatchableManifestForPaths(paths) {
-    return paths.map((normalizedRoutePath) => {
-        const matcher = getNamedRouteRegex(normalizedRoutePath[0], (0, matchers_1.getContextKey)(normalizedRoutePath[1].route), normalizedRoutePath[1].contextKey);
-        if (normalizedRoutePath[1].generated) {
+    return paths.map(([normalizedRoutePath, absoluteRoute, node]) => {
+        const matcher = getNamedRouteRegex(normalizedRoutePath, absoluteRoute, node.contextKey);
+        if (node.generated) {
             matcher.generated = true;
+        }
+        if (node.permanent) {
+            matcher.permanent = true;
+        }
+        if (node.methods) {
+            matcher.methods = node.methods;
         }
         return matcher;
     });
@@ -188,5 +215,4 @@ function parseParameter(param) {
     }
     return { name, repeat, optional };
 }
-exports.parseParameter = parseParameter;
 //# sourceMappingURL=getServerManifest.js.map
